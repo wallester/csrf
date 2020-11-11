@@ -1,4 +1,4 @@
-module github.com/gorilla/csrf
+module github.com/wallester/csrf
 
 require (
 	github.com/gorilla/securecookie v1.1.1
