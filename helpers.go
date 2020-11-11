@@ -1,11 +1,13 @@
 package csrf
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 )
@@ -109,9 +111,22 @@ func (cs *csrf) requestToken(r *http.Request) []byte {
 	// 1. Check the HTTP header first.
 	issued := r.Header.Get(cs.opts.RequestHeader)
 
-	// 2. Fall back to the POST (form) value.
+	// 2. Fall back to the POST (form) value. Return a
+	// nil byte slice on a decoding error (this will fail upstream).
 	if issued == "" {
-		issued = r.PostFormValue(cs.opts.FieldName)
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return nil
+		}
+
+		r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+		formData, err := url.ParseQuery(string(body))
+		if err != nil {
+			return nil
+		}
+
+		issued = formData.Get(cs.opts.FieldName)
 	}
 
 	// 3. Finally, fall back to the multipart form (if set).
