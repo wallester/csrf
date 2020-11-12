@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/pkg/errors"
-
 	"github.com/gorilla/securecookie"
+	"github.com/pkg/errors"
+	commonhttp "github.com/wallester/common/http"
 )
 
 // CSRF token length in bytes.
@@ -73,10 +73,11 @@ const (
 )
 
 type csrf struct {
-	h    http.Handler
-	sc   *securecookie.SecureCookie
-	st   store
-	opts options
+	h                   http.Handler
+	sc                  *securecookie.SecureCookie
+	st                  store
+	opts                options
+	errorPageRenderFunc commonhttp.ErrorPageRenderFunc
 }
 
 // options contains the optional settings for the CSRF middleware.
@@ -91,7 +92,6 @@ type options struct {
 	SameSite       SameSiteMode
 	RequestHeader  string
 	FieldName      string
-	ErrorHandler   http.Handler
 	CookieName     string
 	TrustedOrigins []string
 }
@@ -145,14 +145,9 @@ type options struct {
 //		// framework.
 //	}
 //
-func Protect(authKey []byte, opts ...Option) func(http.Handler) http.Handler {
+func Protect(authKey []byte, errorPageRenderFunc commonhttp.ErrorPageRenderFunc, opts ...Option) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
-		cs := parseOptions(h, opts...)
-
-		// Set the defaults if no options have been specified
-		if cs.opts.ErrorHandler == nil {
-			cs.opts.ErrorHandler = http.HandlerFunc(unauthorizedHandler)
-		}
+		cs := parseOptions(h, errorPageRenderFunc, opts...)
 
 		if cs.opts.MaxAge < 0 {
 			// Default of 12 hours
@@ -222,7 +217,7 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		realToken, err = generateRandomBytes(tokenLength)
 		if err != nil {
 			r = envError(r, err)
-			cs.opts.ErrorHandler.ServeHTTP(w, r)
+			cs.errorPageRenderFunc(w, r)
 			return
 		}
 
@@ -230,7 +225,7 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = cs.st.Save(realToken, w)
 		if err != nil {
 			r = envError(r, err)
-			cs.opts.ErrorHandler.ServeHTTP(w, r)
+			cs.errorPageRenderFunc(w, r)
 			return
 		}
 	}
@@ -252,7 +247,7 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			referer, err := url.Parse(r.Referer())
 			if err != nil || referer.String() == "" {
 				r = envError(r, ErrNoReferer)
-				cs.opts.ErrorHandler.ServeHTTP(w, r)
+				cs.errorPageRenderFunc(w, r)
 				return
 			}
 
@@ -269,7 +264,7 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if valid == false {
 				r = envError(r, ErrBadReferer)
-				cs.opts.ErrorHandler.ServeHTTP(w, r)
+				cs.errorPageRenderFunc(w, r)
 				return
 			}
 		}
@@ -278,7 +273,7 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// ("unsafe") methods, call the error handler.
 		if realToken == nil {
 			r = envError(r, ErrNoToken)
-			cs.opts.ErrorHandler.ServeHTTP(w, r)
+			cs.errorPageRenderFunc(w, r)
 			return
 		}
 
@@ -288,7 +283,7 @@ func (cs *csrf) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Compare the request token against the real token
 		if !compareTokens(requestToken, realToken) {
 			r = envError(r, ErrBadToken)
-			cs.opts.ErrorHandler.ServeHTTP(w, r)
+			cs.errorPageRenderFunc(w, r)
 			return
 		}
 

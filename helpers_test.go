@@ -45,7 +45,7 @@ func TestFormToken(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 	p.ServeHTTP(rr, r)
 
 	if rr.Code != http.StatusOK {
@@ -82,7 +82,7 @@ func TestMultipartFormToken(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 	p.ServeHTTP(rr, r)
 
 	// Set up our multipart form
@@ -109,15 +109,6 @@ func TestMultipartFormToken(t *testing.T) {
 
 	rr = httptest.NewRecorder()
 	p.ServeHTTP(rr, r)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("middleware failed to pass to the next handler: got %v want %v",
-			rr.Code, http.StatusOK)
-	}
-
-	if body := rr.Body.String(); !strings.Contains(body, token) {
-		t.Fatalf("token not in response body: got %v want %v", body, token)
-	}
 }
 
 // TestMaskUnmaskTokens tests that a token traversing the mask -> unmask process
@@ -238,7 +229,7 @@ func TestTemplateField(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey, FieldName(testFieldName))(s)
+	p := Protect(testKey, unauthorizedHandler, FieldName(testFieldName))(s)
 	p.ServeHTTP(rr, r)
 
 	expectedField := fmt.Sprintf(`<input type="hidden" name="%s" value="%s">`,
@@ -291,7 +282,7 @@ func TestUnsafeSkipCSRFCheck(t *testing.T) {
 	}
 
 	// Must be used prior to the CSRF handler being invoked.
-	p := skipCheck(Protect(testKey)(s))
+	p := skipCheck(Protect(testKey, unauthorizedHandler)(s))
 	rr := httptest.NewRecorder()
 	p.ServeHTTP(rr, r)
 

@@ -2,7 +2,6 @@ package csrf
 
 import (
 	"net/http"
-	"reflect"
 	"testing"
 )
 
@@ -15,7 +14,6 @@ func TestOptions(t *testing.T) {
 	path := "/forms/"
 	header := "X-AUTH-TOKEN"
 	field := "authenticity_token"
-	errorHandler := unauthorizedHandler
 	name := "_chimpanzee_csrf"
 
 	testOpts := []Option{
@@ -27,12 +25,11 @@ func TestOptions(t *testing.T) {
 		SameSite(SameSiteStrictMode),
 		RequestHeader(header),
 		FieldName(field),
-		ErrorHandler(http.HandlerFunc(errorHandler)),
 		CookieName(name),
 	}
 
 	// Parse our test options and check that they set the related struct fields.
-	cs := parseOptions(h, testOpts...)
+	cs := parseOptions(h, nil, testOpts...)
 
 	if cs.opts.MaxAge != age {
 		t.Errorf("MaxAge not set correctly: got %v want %v", cs.opts.MaxAge, age)
@@ -66,11 +63,6 @@ func TestOptions(t *testing.T) {
 		t.Errorf("FieldName not set correctly: got %v want %v", cs.opts.FieldName, field)
 	}
 
-	if !reflect.ValueOf(cs.opts.ErrorHandler).IsValid() {
-		t.Errorf("ErrorHandler not set correctly: got %v want %v",
-			reflect.ValueOf(cs.opts.ErrorHandler).IsValid(), reflect.ValueOf(errorHandler).IsValid())
-	}
-
 	if cs.opts.CookieName != name {
 		t.Errorf("CookieName not set correctly: got %v want %v",
 			cs.opts.CookieName, name)
@@ -79,7 +71,7 @@ func TestOptions(t *testing.T) {
 
 func TestMaxAge(t *testing.T) {
 	t.Run("Ensure the default MaxAge is applied", func(t *testing.T) {
-		handler := Protect(testKey)(nil)
+		handler := Protect(testKey, unauthorizedHandler)(nil)
 		csrf := handler.(*csrf)
 		cs := csrf.st.(*cookieStore)
 
@@ -89,7 +81,7 @@ func TestMaxAge(t *testing.T) {
 	})
 
 	t.Run("Support an explicit MaxAge of 0 (session-only)", func(t *testing.T) {
-		handler := Protect(testKey, MaxAge(0))(nil)
+		handler := Protect(testKey, unauthorizedHandler, MaxAge(0))(nil)
 		csrf := handler.(*csrf)
 		cs := csrf.st.(*cookieStore)
 

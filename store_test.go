@@ -36,7 +36,7 @@ func TestStoreCannotSave(t *testing.T) {
 	s := http.NewServeMux()
 	bs := &brokenSaveStore{}
 	s.HandleFunc("/", testHandler)
-	p := Protect(testKey, setStore(bs))(s)
+	p := Protect(testKey, unauthorizedHandler, setStore(bs))(s)
 
 	r, err := http.NewRequest("GET", "/", nil)
 	if err != nil {
@@ -112,7 +112,7 @@ func TestMaxAgeZero(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey, MaxAge(age))(s)
+	p := Protect(testKey, unauthorizedHandler, MaxAge(age))(s)
 	p.ServeHTTP(rr, r)
 
 	if rr.Code != http.StatusOK {
@@ -142,7 +142,7 @@ func TestSameSizeSet(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey, SameSite(SameSiteStrictMode))(s)
+	p := Protect(testKey, unauthorizedHandler, SameSite(SameSiteStrictMode))(s)
 	p.ServeHTTP(rr, r)
 
 	if rr.Code != http.StatusOK {
@@ -172,7 +172,7 @@ func TestSameSiteDefaultLaxMode(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 	p.ServeHTTP(rr, r)
 
 	if rr.Code != http.StatusOK {

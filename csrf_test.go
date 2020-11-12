@@ -10,6 +10,8 @@ import (
 var testKey = []byte("keep-it-secret-keep-it-safe-----")
 var testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
+// var errorHandler = unauthorizedHandler
+
 // TestProtect is a high-level test to make sure the middleware returns the
 // wrapped handler with a 200 OK status.
 func TestProtect(t *testing.T) {
@@ -22,7 +24,7 @@ func TestProtect(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 	p.ServeHTTP(rr, r)
 
 	if rr.Code != http.StatusOK {
@@ -52,7 +54,7 @@ func TestCookieOptions(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	p := Protect(testKey, CookieName("nameoverride"), Secure(false), HttpOnly(false), Path("/pathoverride"), Domain("domainoverride"), MaxAge(173))(s)
+	p := Protect(testKey, unauthorizedHandler, CookieName("nameoverride"), Secure(false), HttpOnly(false), Path("/pathoverride"), Domain("domainoverride"), MaxAge(173))(s)
 	p.ServeHTTP(rr, r)
 
 	if rr.Header().Get("Set-Cookie") == "" {
@@ -82,7 +84,7 @@ func TestCookieOptions(t *testing.T) {
 func TestMethods(t *testing.T) {
 	s := http.NewServeMux()
 	s.HandleFunc("/", testHandler)
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 
 	// Test idempontent ("safe") methods
 	for _, method := range safeMethods {
@@ -104,10 +106,12 @@ func TestMethods(t *testing.T) {
 		}
 	}
 
+	b := strings.NewReader("test")
+
 	// Test non-idempotent methods (should return a 403 without a cookie set)
 	nonIdempotent := []string{"POST", "PUT", "DELETE", "PATCH"}
 	for _, method := range nonIdempotent {
-		r, err := http.NewRequest(method, "/", nil)
+		r, err := http.NewRequest(method, "/", b)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -130,10 +134,11 @@ func TestMethods(t *testing.T) {
 // POST request.
 func TestNoCookie(t *testing.T) {
 	s := http.NewServeMux()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
+	b := strings.NewReader("test")
 
 	// POST the token back in the header.
-	r, err := http.NewRequest("POST", "http://www.gorillatoolkit.org/", nil)
+	r, err := http.NewRequest("POST", "http://www.gorillatoolkit.org/", b)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +155,7 @@ func TestNoCookie(t *testing.T) {
 // TestBadCookie tests for failure when a cookie header is modified (malformed).
 func TestBadCookie(t *testing.T) {
 	s := http.NewServeMux()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 
 	var token string
 	s.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +196,7 @@ func TestBadCookie(t *testing.T) {
 func TestVaryHeader(t *testing.T) {
 	s := http.NewServeMux()
 	s.HandleFunc("/", testHandler)
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 
 	r, err := http.NewRequest("HEAD", "https://www.golang.org/", nil)
 	if err != nil {
@@ -215,7 +220,7 @@ func TestVaryHeader(t *testing.T) {
 func TestNoReferer(t *testing.T) {
 	s := http.NewServeMux()
 	s.HandleFunc("/", testHandler)
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 
 	r, err := http.NewRequest("POST", "https://golang.org/", nil)
 	if err != nil {
@@ -235,7 +240,7 @@ func TestNoReferer(t *testing.T) {
 // match the request URL correctly fail CSRF validation.
 func TestBadReferer(t *testing.T) {
 	s := http.NewServeMux()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 
 	var token string
 	s.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +296,7 @@ func TestTrustedReferer(t *testing.T) {
 	for _, item := range testTable {
 		s := http.NewServeMux()
 
-		p := Protect(testKey, TrustedOrigins(item.trustedOrigin))(s)
+		p := Protect(testKey, unauthorizedHandler, TrustedOrigins(item.trustedOrigin))(s)
 
 		var token string
 		s.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +344,7 @@ func TestTrustedReferer(t *testing.T) {
 // Requests with a valid Referer should pass.
 func TestWithReferer(t *testing.T) {
 	s := http.NewServeMux()
-	p := Protect(testKey)(s)
+	p := Protect(testKey, unauthorizedHandler)(s)
 
 	var token string
 	s.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

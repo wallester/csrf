@@ -2,6 +2,8 @@ package csrf
 
 import (
 	"net/http"
+
+	commonhttp "github.com/wallester/common/http"
 )
 
 // Option describes a functional option for configuring the CSRF handler.
@@ -81,19 +83,6 @@ func SameSite(s SameSiteMode) Option {
 	}
 }
 
-// ErrorHandler allows you to change the handler called when CSRF request
-// processing encounters an invalid token or request. A typical use would be to
-// provide a handler that returns a static HTML file with a HTTP 403 status. By
-// default a HTTP 403 status and a plain text CSRF failure reason are served.
-//
-// Note that a custom error handler can also access the csrf.FailureReason(r)
-// function to retrieve the CSRF validation reason from the request context.
-func ErrorHandler(h http.Handler) Option {
-	return func(cs *csrf) {
-		cs.opts.ErrorHandler = h
-	}
-}
-
 // RequestHeader allows you to change the request header the CSRF middleware
 // inspects. The default is X-CSRF-Token.
 func RequestHeader(header string) Option {
@@ -141,10 +130,11 @@ func setStore(s store) Option {
 
 // parseOptions parses the supplied options functions and returns a configured
 // csrf handler.
-func parseOptions(h http.Handler, opts ...Option) *csrf {
+func parseOptions(h http.Handler, errorPageRenderFunc commonhttp.ErrorPageRenderFunc, opts ...Option) *csrf {
 	// Set the handler to call after processing.
 	cs := &csrf{
-		h: h,
+		h:                   h,
+		errorPageRenderFunc: errorPageRenderFunc,
 	}
 
 	// Default to true. See Secure & HttpOnly function comments for rationale.
