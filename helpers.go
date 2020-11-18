@@ -10,6 +10,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
+
+	commonhttp "github.com/wallester/common/http"
 )
 
 // Token returns a masked CSRF token ready for passing into HTML template or
@@ -113,7 +116,7 @@ func (cs *csrf) requestToken(r *http.Request) []byte {
 
 	// 2. Fall back to the POST (form) value. Return a
 	// nil byte slice on a decoding error (this will fail upstream).
-	if issued == "" {
+	if issued == "" && !strings.HasPrefix(r.Header.Get(commonhttp.ContentTypeParam), commonhttp.ContentTypeMultipartFormData) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			return nil
@@ -130,7 +133,13 @@ func (cs *csrf) requestToken(r *http.Request) []byte {
 	}
 
 	// 3. Finally, fall back to the multipart form (if set).
-	if issued == "" && r.MultipartForm != nil {
+	if issued == "" {
+		const maxUploadSize = 32 << 20 // 32 MB
+
+		if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+			return nil
+		}
+
 		vals := r.MultipartForm.Value[cs.opts.FieldName]
 
 		if len(vals) > 0 {
